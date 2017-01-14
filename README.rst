@@ -63,6 +63,6 @@ TODO
   add arbitrary metadata into xattr.
 
 
-.. _llfuse: .. _PyPi: https://pypi.python.org/pypi/llfuse/
+.. _llfuse: https://pypi.python.org/pypi/llfuse/
 .. _github: https://github.com/ya-induhvidual/libfs
 .. _issue tracker: https://github.com/ya-induhvidual/libfs/issues
