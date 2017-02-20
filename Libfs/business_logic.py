@@ -65,7 +65,8 @@ class BusinessLogic:
                 sys.exit(1)
     
         try:
-            self.DB_BE = import_module("Libfs.%s_be" % db_type)
+            db_module =  import_module("Libfs.%s_be" % db_type)
+            self.DB_BE = db_module.db_backend()
         except:
             sys.stderr.write("Sorry, database type %s not supported.\n" % db_type)
             sys.exit(2)
