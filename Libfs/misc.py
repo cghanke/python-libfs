@@ -5,7 +5,9 @@ import inspect
 import logging
 import logging.config
 import threading
+from traceback import format_tb
 import os
+import sys
 
 # dict to store the actual calltrace
 # by thread-identifier
@@ -17,19 +19,32 @@ def calltrace_logger(func):
     @wraps(func)
     def wrapped(*args, **kwargs):
         calltrace_logger = logging.getLogger("calltrace")
-        this_indent = "\t" * calltrace_state[threading.get_ident()]
+        this_indent = "\t" * (calltrace_state[threading.get_ident()] )
         calltrace_state[threading.get_ident()] += 1
         try:
             if isinstance(args[0],  object):
                 class_name =  type(args[0]).__name__
             else :
-                class_name = ""
+                class_name = "NA"
         except:
-            class_name = ""
+            class_name = "WRAPPER-ERROR"
 
-        calltrace_logger.debug("%s%s.%s:: Entering with args=%s and kwargs=%s" % (this_indent, class_name,  func.__name__, args, kwargs))
-        result = func(*args, **kwargs)
-        calltrace_logger.debug("%s%s.%s:: Leaving with result=%s" % (this_indent, class_name,  func.__name__, ("%s" % result)[:100]))
+        calltrace_logger.debug('%s <%s event="Entering" name="%s">' % (this_indent,  class_name,  func.__name__))
+        calltrace_logger.debug('%s <args><![CDATA[%s]]></args>' % (this_indent,  (args, )) )
+        calltrace_logger.debug('%s <kwargs><![CDATA[%s]]></kwargs>' % (this_indent, (kwargs, ) ))
+        try :
+            result = func(*args, **kwargs)
+        except Exception as e :
+            et, ei, tb = sys.exc_info()
+            calltrace_logger.debug('%s <Exception type="%s" info="%s"><![CDATA[' % (this_indent, et, ei))
+            for line in  format_tb(tb):
+                calltrace_logger.debug('%s %s' % (this_indent, line))
+            calltrace_logger.debug('%s ]]></Exception>' % (this_indent))
+            calltrace_logger.debug('%s </%s>' % (this_indent, class_name))
+            calltrace_state[threading.get_ident()] -= 1
+            raise (e)
+        calltrace_logger.debug('%s <result><![CDATA[%s]]></result>' % (this_indent, ("%s" % result)))
+        calltrace_logger.debug('%s </%s>' % (this_indent, class_name))
         calltrace_state[threading.get_ident()] -= 1
         return result
     return wrapped
