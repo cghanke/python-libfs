@@ -12,10 +12,10 @@ import subprocess
 import time
 import unittest
 
-LIBFS_BIN = "./libfs.py"
+LIBFS_BIN = "scripts/libfs.py"
 LIBFS_MNT = "./test/mnt"
 
-class TestMixIn:
+class TestBase(unittest.TestCase) :
     
     EXISTING_FILE = "%s/NADA" % LIBFS_MNT
     EXISTING_DIR = "%s/NADA" % LIBFS_MNT
@@ -23,9 +23,9 @@ class TestMixIn:
     LIBFS_DB_ORIG = "./test/data/testdb.orig"
     LIBFS_DB = "./test/data/testdb"
     LIBFS_LOG_CFG = "./test/logging.cfg"
-    
+
     @classmethod
-    def setUp(self):
+    def setUpClass(self):
         """
         create a copy of the db and mount libfs in the background
         """
@@ -41,7 +41,7 @@ class TestMixIn:
             raise RuntimeError("Mount failed with rc=%s. output=%s, outerr=%s" % (self.mount_proc.poll(),  output,  outerr))
     
     @classmethod
-    def tearDown(self):
+    def tearDownClass(self):
         """
         unmount libfs
         """
@@ -85,7 +85,7 @@ class TestMixIn:
         shutil.move(self.EXISTING_DIR,  self.NON_EXISTING_DIR)
         shutil.move( self.NON_EXISTING_DIR,  self.EXISTING_DIR)
     
-class ID3Test(TestMixIn,  unittest.TestCase):
+class ID3Test(TestBase):
     LIBFS_SRC_DIR = "./test/data/src"
     LIBFS_DB_ORIG = "./test/data/testdb.orig"
     LIBFS_DB = "./test/data/testdb"

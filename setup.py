@@ -19,7 +19,7 @@ setup(
     packages=['Libfs'],
     license='MIT',
     install_requires=['llfuse', 'mutagenx'],
-    test_suite="tests", 
+    test_suite="test/test_all.py",
     scripts=['scripts/libfs.py'],
     keywords='fuse multimedia',
     classifiers=[
