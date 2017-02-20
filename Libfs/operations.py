@@ -341,39 +341,3 @@ class Operations(llfuse.Operations):
                      'f_files', 'f_ffree', 'f_favail'):
             setattr(stat_, attr, getattr(statfs, attr))
         return stat_
-
-
-@calltrace_logger
-def main():
-    parser = get_default_parser()
-    parser.add_argument('mountpoint', type=str,
-                        help='Where to mount the file system')
-    parser.add_argument('--view', type=str,
-                        help='CSV-string defining the directory structure')
-    parser.add_argument('--debug_fuse', action='store_true', 
-                        help='debug fuse')
-    
-    options = parser.parse_args(sys.argv[1:])
-    if options.logconf:
-        init_logging(options.logconf)
-    if options.debug_fuse :
-            fuse_options.add('debug') 
-    
-    bl = BusinessLogic(options.library, None, options.view)
-    logger.debug('Mounting...')
-    fuse_options = set(llfuse.default_options)
-    fuse_options.add('fsname=libraryfs')
-    fuse_options.add('default_permissions')
-    
-    operations = Operations(options.source, options.mountpoint, bl)
-    llfuse.init(operations, options.mountpoint, fuse_options)
-
-    try:
-        logger.debug('Entering main loop..')
-        llfuse.main(workers=1)
-    except:
-        llfuse.close(unmount=False)
-        raise
-
-    logger.debug('Umounting..')
-    llfuse.close()
