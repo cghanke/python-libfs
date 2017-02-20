@@ -334,10 +334,14 @@ class Operations(llfuse.Operations):
         used for e.g. "df"
         used number of indes should represent number of files etc
         """
-        # XXX disabled for now
-        raise FUSEError(errno.ENOSYS)
+        # XXX should be fed from the DB.
         stat_ = llfuse.StatvfsData()
-        for attr in ('f_bsize', 'f_frsize', 'f_blocks', 'f_bfree', 'f_bavail',
-                     'f_files', 'f_ffree', 'f_favail'):
-            setattr(stat_, attr, getattr(statfs, attr))
+        stat_.f_bsize = 666
+        stat_.f_frsize = 666
+        stat_.f_blocks = 666777
+        stat_.f_bfree = 777
+        stat_.f_bavail = 666
+        stat_.f_files = 666
+        stat_.f_ffree = 777
+        stat_.f_favail = 777
         return stat_
