@@ -46,29 +46,29 @@ class Operations(llfuse.Operations):
         # mode is taken from mountpoint
 
     @calltrace_logger
-    def lookup(self, inode_p, name, ctx=None):
+    def lookup(self, parent_inode, name, ctx=None):
         """
         Lookup request handler
         """
         name = fsdecode(name)
-        logger.debug('lookup: for %s in %d', name, inode_p)
-        full_path = os.path.join(self.cache.get_path_by_inode(inode_p), name)
+        logger.debug('lookup: for %s in %d', name, parent_inode)
+        full_path = os.path.join(self.cache.get_path_by_inode(parent_inode), name)
         logger.debug('lookup: path = %s', full_path)
         logger.debug('self._pinode_fn2srcpath_map = %s', self._pinode_fn2srcpath_map)
         if not self.business_logic.is_vdir(full_path) :
             try :
-                real_path = self._pinode_fn2srcpath_map[inode_p][name]
-                attr = self._getattr(path=real_path)
+                src_path = self._pinode_fn2srcpath_map[parent_inode][name]
+                attr = self._getattr(path=src_path)
             except KeyError :
-                # we need to create our _pinode_fn2srcpath_map-cache for this inode_p
+                # we need to create our _pinode_fn2srcpath_map-cache for this parent_inode
                 # so just call readdir. 
                 # it is a generator, therefore call it in a for-loop
-                for gg in self.readdir(inode_p, 0) :
+                for gg in self.readdir(parent_inode, 0) :
                     break
                 logger.debug('self._pinode_fn2srcpath_map = %s', self._pinode_fn2srcpath_map)
                 try :
-                    real_path = self._pinode_fn2srcpath_map[inode_p][name]
-                    attr = self._getattr(path=real_path)
+                    src_path = self._pinode_fn2srcpath_map[parent_inode][name]
+                    attr = self._getattr(path=src_path)
                 except : # now, it's really not there
                     raise FUSEError(errno.ENOENT)
         else : # is a dir
@@ -189,7 +189,7 @@ class Operations(llfuse.Operations):
             yield (fsencode(name), attr, ino)
 
     @calltrace_logger
-    def rename(self, old_inode_p, old_name, new_inode_p, new_name, ctx):
+    def rename(self, old_parent_inode, old_name, new_parent_inode, new_name, ctx):
         """
         rename only works within this filesystem.
         It changes the metadata of the file 
@@ -197,8 +197,8 @@ class Operations(llfuse.Operations):
         """
         old_name = fsdecode(old_name)
         new_name = fsdecode(new_name)
-        old_parent = self.cache.get_path_by_inode(old_inode_p)
-        new_parent = self.cache.get_path_by_inode(new_inode_p)
+        old_parent = self.cache.get_path_by_inode(old_parent_inode)
+        new_parent = self.cache.get_path_by_inode(new_parent_inode)
         old_path = os.path.join(old_parent, old_name)
         new_path = os.path.join(new_parent, new_name)
         logger.debug("old_path: %s, new_path:%s",  old_path,  new_path)
@@ -235,7 +235,7 @@ class Operations(llfuse.Operations):
             self.cache.lookup_lock.release()
         else : # rename a single file
             # get source path of file in question
-            src_path = self._pinode_fn2srcpath_map[old_inode_p][old_name]
+            src_path = self._pinode_fn2srcpath_map[old_parent_inode][old_name]
             logger.debug("rename: src_path=%s", src_path) 
             # to change the name of the file, make sure it fits into the generated filename pattern.
             try : 
@@ -270,17 +270,17 @@ class Operations(llfuse.Operations):
             self.business_logic.add_entry(src_path, new_metadata)
             inode = self.business_logic.get_inode_by_srcfilename(src_path)
             self.cache.update_inode_path_pair(inode,  new_path)
-            self._pinode_fn2srcpath_map[old_inode_p][new_name] = src_path
-            del(self._pinode_fn2srcpath_map[old_inode_p][old_name])
+            self._pinode_fn2srcpath_map[old_parent_inode][new_name] = src_path
+            del(self._pinode_fn2srcpath_map[old_parent_inode][old_name])
             self.cache.lookup_lock.release()
         return
 
     @calltrace_logger
-    def mkdir(self, inode_p, name, mode, ctx):
+    def mkdir(self, parent_inode, name, mode, ctx):
         """
         a new directory means a new "." entry in the list of the present dirtree.
         """
-        full_path = os.path.join(self.cache.get_path_by_inode(inode_p), fsdecode(name))
+        full_path = os.path.join(self.cache.get_path_by_inode(parent_inode), fsdecode(name))
         if not self.business_logic.is_vdir(full_path) :
             raise FUSEError(errno.ENOLINK)
         # create it 
