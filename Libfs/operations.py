@@ -29,7 +29,7 @@ class Operations(llfuse.Operations):
                     setattr(self.vdir_stat,  attr,  getattr(mpt_stat,  attr))
                except:
                    pass
-        
+
         lib_stat = os.lstat(library)
         # set times
         # mtime from mounting
@@ -61,10 +61,7 @@ class Operations(llfuse.Operations):
                 attr = self._getattr(path=src_path)
             except KeyError :
                 # we need to create our _pinode_fn2srcpath_map-cache for this parent_inode
-                # so just call readdir. 
-                # it is a generator, therefore call it in a for-loop
-                for gg in self.readdir(parent_inode, 0) :
-                    break
+                self._readdir(parent_inode)
                 logger.debug('self._pinode_fn2srcpath_map = %s', self._pinode_fn2srcpath_map)
                 try :
                     src_path = self._pinode_fn2srcpath_map[parent_inode][name]
@@ -141,7 +138,7 @@ class Operations(llfuse.Operations):
     @calltrace_logger
     def opendir(self, inode, ctx):
         """
-        opena a dir 
+        open a dir, return the inode-number as a fh
         """
         logger.debug('opendir %s' , inode)
         if not self.business_logic.is_vdir(self.cache.get_path_by_inode(inode)) :
@@ -149,9 +146,16 @@ class Operations(llfuse.Operations):
         return inode
 
     @calltrace_logger
-    def readdir(self, inode, off):
+    def _readdir(self,  inode):
+        """
+        readdir entries from cache.
+        update cache if required. 
+        """
+        vpath =  self.cache.get_path_by_inode(inode)
         path = self.cache.get_path_by_inode(inode)
         logger.debug('readdir %s, off %s' , path, off)
+        # XXX
+        # check cache first !
         entries = []
         # get files from db for this vdir
         for vnode, vname, src_path in self.business_logic.get_contents_by_vpath(path) :         
@@ -173,11 +177,21 @@ class Operations(llfuse.Operations):
                     self._pinode_fn2srcpath_map[inode][vname] = src_path
                 except :
                     self._pinode_fn2srcpath_map[inode] = {vname : src_path}
-            
+
+        path = self.cache.get_path_by_inode(inode)
         for entry in entries:
             if entry[1] == "." or entry[1] == ".." : continue
             this_path = os.path.join(path,  entry[1])
             self.cache.add_inode_path_pair(entry[0], this_path)
+        return entries
+
+    @calltrace_logger
+    def readdir(self, inode, off):
+        """
+        read dir-entries. inode should be a file-handle, but 
+        we just use the inode-number for now
+        """
+        entries = self._readdir(inode)
         logger.debug('readdir entries : %s', entries)
         logger.debug('readdir read %d entries, starting at %d', len(entries), off)
         logger.debug('inode2path_map: %s', self.cache.inode2path_map)
