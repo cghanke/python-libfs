@@ -23,10 +23,12 @@ import yaml
 from Libfs.misc import *
 from Libfs.business_logic import BusinessLogic
 from Libfs.operations import Operations
+import faulthandler
+
+faulthandler.enable()
 
 logger = logging.getLogger(__name__)
 
-@calltrace_logger
 def main():
     parser = ArgumentParser()
     subparsers = parser.add_subparsers(dest='subparser_name',  help='sub-command help')
@@ -109,6 +111,7 @@ def main():
                     try:
                         metadata = plugin.read_metadata(full_path)
                     except :
+                        logger.warn("cannot read metadata of file: %s" % full_path)
                         continue
                     bl.add_entry(full_path, metadata)
         # if we're updating, delete entries in 
