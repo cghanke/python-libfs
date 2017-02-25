@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class Operations(llfuse.Operations):
 
     @calltrace_logger
-    def __init__(self, library,  mountpoint,  current_view_name):
+    def __init__(self, library, mountpoint, current_view_name):
         super().__init__()
         self.mountpoint = mountpoint
         self.business_logic = BusinessLogic(library, None, current_view_name)
@@ -26,7 +26,7 @@ class Operations(llfuse.Operations):
         for attr in dir(mpt_stat):
            if attr.startswith('st_'):
                try:
-                    setattr(self.vdir_stat,  attr,  getattr(mpt_stat,  attr))
+                    setattr(self.vdir_stat, attr, getattr(mpt_stat, attr))
                except:
                    pass
 
@@ -58,14 +58,14 @@ class Operations(llfuse.Operations):
         if not self.business_logic.is_vdir(full_path) :
             try :
                 src_path = self._pinode_fn2srcpath_map[parent_inode][name]
-                attr = self._getattr(path=src_path)
+                attr = self._get_src_attr(src_path)
             except KeyError :
                 # we need to create our _pinode_fn2srcpath_map-cache for this parent_inode
                 self._readdir(parent_inode)
                 logger.debug('self._pinode_fn2srcpath_map = %s', self._pinode_fn2srcpath_map)
                 try :
                     src_path = self._pinode_fn2srcpath_map[parent_inode][name]
-                    attr = self._getattr(path=src_path)
+                    attr = self._get_src_attr(src_path)
                 except : # now, it's really not there
                     raise FUSEError(errno.ENOENT)
         else : # is a dir
@@ -79,12 +79,31 @@ class Operations(llfuse.Operations):
     @calltrace_logger
     def getattr(self, inode, ctx=None):
         """
-        Entry function.
+        get attribute for inode.
         """
         if inode in self.cache.inode2fd_map:
-            return self._getattr(fd=self.cache.get_fd_by_inode(inode))
+            path = None
+            fd = self.cache.get_fd_by_inode(inode)
+            logger.debug("_getattr for fd %s" , fd)
         else:
-            return self._getattr(path=self.cache.get_path_by_inode(inode))
+            fd = None
+            path=self.cache.get_path_by_inode(inode)
+            logger.debug("getattr for path %s" , path)
+            # first, check if path is a virtual directory
+            if self.business_logic.is_vdir(path) :
+                attr = self._get_vdir_attr(path)
+                logger.debug("_getattr: returning inode from db : %s", attr.st_ino)
+                return attr
+        # we're dealing with a file here
+        try:
+            if fd is None:
+                src_path = self.buisiness_logic.get_src_path(path)
+                this_stat = os.lstat(src_path)
+            else:
+                this_stat = os.fstat(fd)
+        except OSError as exc:
+            raise FUSEError(exc.errno)
+        return self._fill_entry(this_stat)
     
     @calltrace_logger
     def _get_vdir_attr(self, vpath) :
@@ -93,36 +112,19 @@ class Operations(llfuse.Operations):
         for attr in ('st_mode', 'st_nlink', 'st_uid', 'st_gid',
                      'st_rdev', 'st_size', 'st_atime_ns', 'st_mtime_ns', 'st_ctime_ns' ):
             setattr(entry, attr, getattr(self.vdir_stat, attr))
-
-        entry.st_ino = self.business_logic.get_dir_vnode(vpath)
-        
+        entry.st_ino = self.business_logic.get_vdir_inode(vpath)
         logger.debug("_get_vdir_attr: returning st_ino=%s", entry.st_ino)
         return entry
-        
-    @calltrace_logger
-    def _getattr(self, path=None, fd=None):
-        assert fd is None or path is None
-        assert not(fd is None and path is None)
-        if not path is None:
-            logger.debug("_getattr for path %s" , path)
-            # first, check if path is a virtual directory
-            if self.business_logic.is_vdir(path) :
-                attr = self._get_vdir_attr(path) 
-                logger.debug("_getattr: returning inode from db : %s", attr.st_ino)
-                return attr
-        else :
-            # fd always points to a file
-            logger.debug("_getattr for fd %s" , fd)
-        # we're dealing with a file here
-        entry = llfuse.EntryAttributes()
-        try:
-            if fd is None:
-                stat = os.lstat(path)
-            else:
-                stat = os.fstat(fd)
-        except OSError as exc:
-            raise FUSEError(exc.errno)
 
+    def _get_src_attr(self, src_path):
+        """
+        return attribute from a src file
+        """
+        this_stat = os.lstat(src_path)
+        return self._fill_entry(this_stat)
+        
+    def _fill_entry(self, stat):
+        entry = llfuse.EntryAttributes()
         for attr in ('st_ino', 'st_mode', 'st_nlink', 'st_uid', 'st_gid',
                      'st_rdev', 'st_size', 'st_atime_ns', 'st_mtime_ns',
                      'st_ctime_ns'):
@@ -132,7 +134,7 @@ class Operations(llfuse.Operations):
         entry.attr_timeout = 5
         entry.st_blksize = 512
         entry.st_blocks = ((entry.st_size + entry.st_blksize-1) // entry.st_blksize)
-        logger.debug("_getattr: returning inode from fs : %s", entry.st_ino)
+        logger.debug("_fill_entry: returning inode from fs : %s", entry.st_ino)
         return entry
 
     @calltrace_logger
@@ -146,39 +148,36 @@ class Operations(llfuse.Operations):
         return inode
 
     @calltrace_logger
-    def _readdir(self,  inode):
+    def _readdir(self, inode):
         """
         readdir entries from cache.
         update cache if required. 
         """
-        vpath =  self.cache.get_path_by_inode(inode)
-        path = self.cache.get_path_by_inode(inode)
-        logger.debug('readdir %s, off %s' , path, off)
+        vpath = self.cache.get_path_by_inode(inode)
+        logger.debug('readdir %s, off %s', vpath, off)
         # XXX
         # check cache first !
         entries = []
         # get files from db for this vdir
-        for vnode, vname, src_path in self.business_logic.get_contents_by_vpath(path) :         
+        for vnode, vname, src_path in self.business_logic.get_contents_by_vpath(vpath) :
             if src_path is None :
-                full_path = os.path.join(path,  vname)
+                full_path = os.path.join(vpath, vname)
                 attr = self._get_vdir_attr(full_path)
                 if vnode > 0 :
                     setattr(attr, 'st_ino', vnode)
-                logger.debug('readdir vnode %s, full_path %s, vname %s, src_path %s, attr.st_ino %s', vnode, full_path,  vname, src_path, attr.st_ino)
+                logger.debug('readdir vnode %s, full_path %s, vname %s, src_path %s, attr.st_ino %s', vnode, full_path, vname, src_path, attr.st_ino)
                 entries.append((vnode, vname, attr))
             else :
                 if src_path == "MOUNTPOINT_PARENT" :
-                    attr = self._getattr(path="/")
+                    attr = self._get_src_attr(self.mountpoint)
                     vnode = attr.st_ino
                 else :
-                    attr = self._getattr(path=src_path)
+                    attr = self._get_src_attr(src_path)
                 entries.append((vnode, vname, attr))
                 try :
                     self._pinode_fn2srcpath_map[inode][vname] = src_path
                 except :
                     self._pinode_fn2srcpath_map[inode] = {vname : src_path}
-
-        path = self.cache.get_path_by_inode(inode)
         for entry in entries:
             if entry[1] == "." or entry[1] == ".." : continue
             this_path = os.path.join(path,  entry[1])
@@ -194,7 +193,7 @@ class Operations(llfuse.Operations):
         entries = self._readdir(inode)
         logger.debug('readdir entries : %s', entries)
         logger.debug('readdir read %d entries, starting at %d', len(entries), off)
-        logger.debug('inode2path_map: %s', self.cache.inode2path_map)
+        logger.debug('inode2vpath_map: %s', self.cache.inode2vpath_map)
         logger.debug('_pinode_fn2srcpath_map: %s', self._pinode_fn2srcpath_map)
 
         for (ino, name, attr) in sorted(entries):
@@ -215,7 +214,7 @@ class Operations(llfuse.Operations):
         new_parent = self.cache.get_path_by_inode(new_parent_inode)
         old_path = os.path.join(old_parent, old_name)
         new_path = os.path.join(new_parent, new_name)
-        logger.debug("old_path: %s, new_path:%s",  old_path,  new_path)
+        logger.debug("old_path: %s, new_path:%s", old_path, new_path)
       
         # rename is only allowed in the same dir-level
         old_vpath_list = get_vpath_list(old_path)
@@ -235,17 +234,17 @@ class Operations(llfuse.Operations):
         if self.business_logic.is_vdir(old_path) : # rename a directory
             # get the key of this dir_level
             key = self.business_logic.get_key_of_vpath(old_parent)
-            logger.error("into db: %s = %s ",  key,  new_vpath_list[-1])
+            logger.error("into db: %s = %s ", key, new_vpath_list[-1])
             # check if new_path is valid
-            if not self.business_logic.metadata_plugin.is_valid_metadata(key,  new_vpath_list[-1]):
-                logger.error("New value \"%s\" for key \"%s\" is invalid according to metadata_plugin.",  new_vpath_list[-1],  key )
+            if not self.business_logic.metadata_plugin.is_valid_metadata(key, new_vpath_list[-1]):
+                logger.error("New value \"%s\" for key \"%s\" is invalid according to metadata_plugin.", new_vpath_list[-1], key )
                 raise FUSEError(errno.EINVAL)
             self.cache.lookup_lock.acquire()
             # update all database entries
-            self.business_logic.update_column(old_vpath_list,  new_vpath_list)
+            self.business_logic.update_column(old_vpath_list, new_vpath_list)
             # update cache
             self.business_logic.generate_vtree()
-            self.cache.update_maps(old_path,  new_path)
+            self.cache.update_maps(old_path, new_path)
             self.cache.lookup_lock.release()
         else : # rename a single file
             # get source path of file in question
@@ -283,7 +282,7 @@ class Operations(llfuse.Operations):
             self.business_logic.remove_entry(src_path)
             self.business_logic.add_entry(src_path, new_metadata)
             inode = self.business_logic.get_inode_by_srcfilename(src_path)
-            self.cache.update_inode_path_pair(inode,  new_path)
+            self.cache.update_inode_path_pair(inode, new_path)
             self._pinode_fn2srcpath_map[old_parent_inode][new_name] = src_path
             del(self._pinode_fn2srcpath_map[old_parent_inode][old_name])
             self.cache.lookup_lock.release()
@@ -314,9 +313,9 @@ class Operations(llfuse.Operations):
         if flags & os.O_CREAT :
             raise FUSEError(errno.EROFS)
         try:
-            fd = os.open(self.business_logic.get_srcfilename_by_inode(inode), flags)
+            fd = os.open(self.business_logic.get_srcfilename_by_srcinode(inode), flags)
         except OSError as exc:
-            logger.error("Cannot open %s with flags %s", self.business_logic.get_srcfilename_by_inode(inode), flags )
+            logger.error("Cannot open %s with flags %s", self.business_logic.get_srcfilename_by_srcinode(inode), flags )
             raise FUSEError(exc.errno)
         self.cache.inode2fd_map[inode] = fd
         self.cache.fd2inode_map[fd] = inode
