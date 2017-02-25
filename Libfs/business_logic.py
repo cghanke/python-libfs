@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 class BusinessLogic:
     """
     Accessing the actual DB for the library.
-    This one is sqlite, but could be replaced by others.
     """
     FILES_TABLE = "files"
     VTREE_TABLE = "trees"
@@ -132,7 +131,7 @@ class BusinessLogic:
                 return False
     
         if do_lookup_dir(self.vtree, get_vpath_list(vpath), True) :
-            result = self.get_dir_vnode(vpath)
+            result = self.get_vdir_inode(vpath)
         else :
             result = False
         return result
@@ -179,12 +178,12 @@ class BusinessLogic:
         logger.debug("vpath_list[:-1]=%s",  vpath_list[:-1])
         logger.debug("vtree=%s",  self.vtree)
         this_vtree = self.seek_vtree(vpath_list=vpath_list[:-1])
-        vnode = self.get_dir_vnode(vpath)
+        vnode = self.get_vdir_inode(vpath)
         this_vtree[vpath_list[-1]] = {}
         return vnode
     
     @calltrace_logger
-    def get_dir_vnode(self, canon_path) :
+    def get_vdir_inode(self, canon_path) :
         """
         put vpath in a cache 
         """
@@ -422,7 +421,7 @@ class BusinessLogic:
         return [tpl[0] for tpl in res]
     
     @calltrace_logger
-    def get_srcfilename_by_inode(self,  inode):
+    def get_srcfilename_by_srcinode(self,  inode):
         """
         return src_filename
         """
@@ -526,11 +525,11 @@ class BusinessLogic:
         contents = []
 
         # add "." and ".." entries
-        vnode = self.get_dir_vnode(vpath)
+        vnode = self.get_vdir_inode(vpath)
         contents.append((vnode, ".", None))
         if dir_level > 0 :
             upper_vpath = "/".join(vpath_list[:-1])
-            vnode = self.get_dir_vnode(upper_vpath)
+            vnode = self.get_vdir_inode(upper_vpath)
             contents.append((vnode, "..", None))
         else :
             contents.append((-1, "..", "MOUNTPOINT_PARENT"))
@@ -556,7 +555,7 @@ class BusinessLogic:
                 # path within a vdir must not be empty, 
                 # otherwise it is assinged to the dirvnode of the parent vdir
                 assert(len(val) > 0)
-                contents.append( (self.get_dir_vnode(os.path.join(vpath, val)), val, None))
+                contents.append( (self.get_vdir_inode(os.path.join(vpath, val)), val, None))
             
         logger.debug("get_contents_by_vpath returning: %s" % contents)
         # return vnode for contents
@@ -570,4 +569,3 @@ class BusinessLogic:
         logger.debug("result = %s",  res)
         assert (len(res) == 1)
         return res[0][0]
-
