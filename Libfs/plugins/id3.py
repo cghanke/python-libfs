@@ -6,7 +6,7 @@ The metadata itself is always a dict.
 from mutagenx.easyid3 import EasyID3
 from mutagenx._constants import GENRES
 
-IGNORE_KEYS = [  ]
+IGNORE_KEYS = []
 
 def read_metadata(src_filename):
     """
@@ -35,10 +35,7 @@ def is_valid_metadata(key, value):
     Ignore it for now
     """
     if key == "genre":
-        if value in GENRES:
-            return True
-        else:
-            return False
+        return value in GENRES
     elif key == "tracknumber":
         try:
             if value == int(value):
@@ -52,18 +49,20 @@ def get_default_view():
     return the default view.
     default_dirtree, default_filename_generator
     """
-    return { "dirtree" : ['genre', 'artist', 'date', 'album'], "fn_gen" : "%{tracknumber} -- %{title}.mp3"}
+    return {"dirtree" : ['genre', 'artist', 'date', 'album'],
+            "fn_gen" : "%{tracknumber} -- %{title}.mp3"}
 
 def get_valid_keys():
     """
     return a list of all valid keys for this plugin
-    XXX: should write an escape-mechnism for :* etc
     """
-    valid_keys=[]
+    valid_keys = []
+    # valid_keys may contain characters confusing the shell
+    # could write an escape-mechnism for them (:* )
     for k in sorted(EasyID3.valid_keys.keys()):
-        if ":" in k : continue
-        if "*" in k : continue
-        if " " in k : continue
-        if k in IGNORE_KEYS : continue
+        if ":" in k: continue
+        if "*" in k: continue
+        if " " in k: continue
+        if k in IGNORE_KEYS: continue
         valid_keys.append(k)
     return valid_keys

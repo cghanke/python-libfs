@@ -1,0 +1,4 @@
+[TYPECHECK]
+
+# pylint cannot get members of llfuse
+ignored-modules=llfuse

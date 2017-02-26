@@ -62,10 +62,13 @@ Surely, please do! This project is hosted on github_.
 Coding conventions
 ------------------
 
-* vpath:
-  The virtual path as seen in the mounted filesystem
-* srcpath:
-  The real path of a file
+* names of variables:
+ * vpath:
+   The virtual path as seen in the mounted filesystem
+ * srcpath:
+   The real path of a file
+* pylint:
+  use the provided pylintrc to check the code.
 
 
 TODO
