@@ -1,9 +1,14 @@
 from setuptools import setup
-from os import path
-
+from os import path, environ
+from sys import argv
 
 here = path.abspath(path.dirname(__file__))
 
+try:
+    if argv[1] == "test":
+        environ['PYTHONPATH'] = here
+except IndexError:
+    pass
 
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
