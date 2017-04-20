@@ -198,6 +198,17 @@ class BusinessLogic:
         return vnode
 
     @calltrace_logger
+    def rmdir(self, vpath):
+        """
+        remove a directory from the vpath.
+        Throw an exception if dir is not empty
+        """
+        contents = self.get_contents_by_vpath(vpath)
+        if len(contents) > 2:
+             raise FUSEError(errno.ENOTEMPTY)
+        return
+
+    @calltrace_logger
     def get_vdir_inode(self, canon_path):
         """
         put vpath in a cache

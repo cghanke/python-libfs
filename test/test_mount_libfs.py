@@ -92,6 +92,13 @@ class TestBase(unittest.TestCase):
         shutil.move(self.EXISTING_DIR, self.NON_EXISTING_DIR)
         shutil.move(self.NON_EXISTING_DIR, self.EXISTING_DIR)
 
+    def test_mkdir_rmdir(self):
+        """
+        create a dir.
+        """
+        os.mkdir(self.NON_EXISTING_DIR)
+        os.rmdir(self.NON_EXISTING_DIR)
+    
 class ID3Test(TestBase):
     """
     Actual test using the id3-plugin

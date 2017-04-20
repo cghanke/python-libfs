@@ -321,6 +321,18 @@ class Operations(llfuse.Operations):
         return vattr
 
     @calltrace_logger
+    def rmdir(self, parent_inode, name, ctx):
+        """
+        remove an empty dir 
+        """
+        full_path = os.path.join(self.cache.get_path_by_inode(parent_inode), fsdecode(name))
+        if not self.business_logic.is_vdir(full_path):
+            raise FUSEError(errno.ENOLINK)
+        self.business_logic.rmdir(full_path)
+        self.cache.forget_path(parent_inode, name)
+        return
+
+    @calltrace_logger
     def open(self, inode, flags, ctx):
         """
         open a file.
