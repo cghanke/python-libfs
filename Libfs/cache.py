@@ -6,7 +6,7 @@ Copyright ©  Nikolaus Rath <Nikolaus.org>
 """
 
 import logging
-from llfuse import ROOT_INODE,  FUSEError
+from llfuse import ROOT_INODE, FUSEError
 from threading import Lock
 from collections import defaultdict
 import errno
@@ -76,8 +76,10 @@ class Memcache:
                 self.lookup_cnt[inode] -= nlookup
                 continue
             logger.debug('forgetting about inode %d', inode)
+            # XXX We never put sth into inode2fd_map...
             assert inode not in self.inode2fd_map
             self.lookup_lock.acquire()
+            # XXX this could fail if inode is not looked up? Could put it in a proper try except:
             del self.lookup_cnt[inode]
             del self.inode2vpath_map[inode]
             self.lookup_lock.release()
@@ -95,6 +97,7 @@ class Memcache:
                 self.inode2vpath_map[inode] = next(iter(val))
         else:
             self.lookup_lock.acquire()
+            # XXX this could fail if inode is not looked up? Could put it in a proper try except:
             del self.lookup_cnt[inode]
             del self.inode2vpath_map[inode]
             self.lookup_lock.release()
