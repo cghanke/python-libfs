@@ -128,7 +128,8 @@ def main():
                 if not os.path.exists(src_name):
                     bl.remove_entry(src_name)
     else:    # should never arrive here
-        assert 0
+        parser.error("No command given")
+
 
 if __name__ == '__main__':
     main()
