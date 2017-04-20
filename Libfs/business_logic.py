@@ -70,8 +70,8 @@ class BusinessLogic:
         except ImportError:
             sys.stderr.write("Sorry, database type %s not supported.\n" % db_type)
             sys.exit(2)
+        self.DB_BE.open(user, password, host, database)
         try:
-            self.DB_BE.open(user, password, host, database)
             self.check_db()
             do_setup_db = False
         except: # setup a new db
@@ -115,7 +115,7 @@ class BusinessLogic:
     @calltrace_logger
     def lookup_dir(self, vpath):
         """
-        lookup contents of a vdir in the db
+        return inode number of a vdir in the db
         """
         @calltrace_logger
         def do_lookup_dir(vtree, vpath_list, result):
@@ -372,8 +372,9 @@ class BusinessLogic:
             for k in self.ordered_files_keys:
                 update_str += "%s=?, " % (k)
             update_str = update_str[:-2]
+            values.append(src_filename)
             query_str = "UPDATE %s SET %s WHERE src_filename=?" % (self.FILES_TABLE, update_str)
-            self.DB_BE.execute_statment(query_str, *values, src_filename)
+            self.DB_BE.execute_statment(query_str, *values)
         self.DB_BE.commit()
         # revert modifications to metadata
         metadata.pop(self.SRC_FILENAME_KEY)
@@ -385,8 +386,8 @@ class BusinessLogic:
         """
         removes a file-entry
         """
-        self.DB_BE.execute_statment("DELETE from %s WHERE src_filename='%s'" %
-                                    (self.FILES_TABLE, src_filename))
+        self.DB_BE.execute_statment("DELETE from %s WHERE src_filename=?" %
+                                    (self.FILES_TABLE), src_filename)
         self.DB_BE.commit()
         return
 
@@ -613,8 +614,8 @@ class BusinessLogic:
         """
         return the inode from a src_filename, callend by rename
         """
-        res = self.DB_BE.execute_statment("SELECT src_inode FROM %s WHERE src_filename='%s';" %
-                                          (self.FILES_TABLE, src_filename))
+        res = self.DB_BE.execute_statment("SELECT src_inode FROM %s WHERE src_filename=?;" %
+                                          (self.FILES_TABLE), src_filename)
         LOGGER.debug("result = %s", res)
         assert len(res) == 1
         return res[0][0]
