@@ -27,32 +27,30 @@ class Operations(llfuse.Operations):
         """
         super().__init__()
         self.mountpoint = mountpoint
+        # we need to get that one here, since accessing anything sth. inside the libfs
+        # will deadlock
+        self.mountpoint_parent = os.path.dirname(mountpoint)
         self.business_logic = BusinessLogic(library, None, current_view_name)
         self.cache = Memcache()
         self.business_logic.generate_vtree()
         self._pinode_fn2srcpath_map = {}
         self.vdir_stat = llfuse.EntryAttributes()
-        mpt_stat = os.lstat(mountpoint)
-        for attr in dir(mpt_stat):
-            if attr.startswith('st_'):
-                try:
-                    setattr(self.vdir_stat, attr, getattr(mpt_stat, attr))
-                except:
-                    pass
-        lib_stat = os.lstat(library)
+        self.lib_stat = os.lstat(library)
         # set times
         # mtime from mounting
         self.vdir_stat.st_atime_ns = int(mktime(localtime()) * 10**9)
         # ctime and mtime from lib-file
-        self.vdir_stat.st_ctime_ns = lib_stat.st_ctime_ns
-        self.vdir_stat.st_mtime_ns = lib_stat.st_mtime_ns
-        # other standard- entries
+        self.vdir_stat.st_ctime_ns = self.lib_stat.st_ctime_ns
+        self.vdir_stat.st_mtime_ns = self.lib_stat.st_mtime_ns
+        # other standard-entries
         self.vdir_stat.generation = 0
-        self.vdir_stat.entry_timeout = 5
         self.vdir_stat.attr_timeout = 5
+        self.vdir_stat.entry_timeout = 5
         self.vdir_stat.st_blksize = 512
         self.vdir_stat.st_blocks = 666
-        # mode is taken from mountpoint
+        self.vdir_stat.st_gid = os.getgid()
+        self.vdir_stat.st_mode = 16877
+        self.vdir_stat.st_uid = os.getuid()
 
     @calltrace_logger
     def lookup(self, parent_inode, name, ctx=None):
@@ -89,6 +87,8 @@ class Operations(llfuse.Operations):
     def getattr(self, inode, ctx=None):
         """
         get attribute for inode.
+        we need to use inode in case the file is still
+        open, but already deleted (?).
         """
         if inode in self.cache.inode2fd_map:
             path = None
@@ -101,12 +101,12 @@ class Operations(llfuse.Operations):
             # first, check if path is a virtual directory
             if self.business_logic.is_vdir(path):
                 attr = self._get_vdir_attr(path)
-                LOGGER.debug("_getattr: returning inode from db: %s", attr.st_ino)
-                return attr
+                LOGGER.debug("_getattr: returning attr from db: %s", attr)
+                return self._fill_entry(attr)
         # we're dealing with a file here
         try:
             if fd is None:
-                src_path = self.buisiness_logic.get_src_path(path)
+                src_path = self.business_logic.get_srcfilename_by_srcinode(inode)
                 this_stat = os.lstat(src_path)
             else:
                 this_stat = os.fstat(fd)
@@ -118,8 +118,8 @@ class Operations(llfuse.Operations):
     def _get_vdir_attr(self, vpath):
         entry = llfuse.EntryAttributes()
         # set normal attrs of vdirs to those of mountpoint
-        for attr in ('st_mode', 'st_nlink', 'st_uid', 'st_gid',
-                     'st_rdev', 'st_size', 'st_atime_ns', 'st_mtime_ns', 'st_ctime_ns'):
+        for attr in ('st_mode', 'st_nlink', 'st_uid', 'st_gid', 'st_rdev',
+                     'st_size', 'st_atime_ns', 'st_mtime_ns', 'st_ctime_ns', 'st_blocks'):
             setattr(entry, attr, getattr(self.vdir_stat, attr))
         entry.st_ino = self.business_logic.get_vdir_inode(vpath)
         LOGGER.debug("_get_vdir_attr: returning st_ino=%s", entry.st_ino)
@@ -129,6 +129,7 @@ class Operations(llfuse.Operations):
         """
         return attribute from a src file
         """
+        assert not src_path.startswith(self.mountpoint)
         this_stat = os.lstat(src_path)
         return self._fill_entry(this_stat)
 
@@ -180,7 +181,7 @@ class Operations(llfuse.Operations):
                 entries.append((vnode, vname, attr))
             else:
                 if src_path == "MOUNTPOINT_PARENT":
-                    attr = self._get_src_attr(self.mountpoint)
+                    attr = self._get_src_attr(self.mountpoint_parent)
                     vnode = attr.st_ino
                 else:
                     attr = self._get_src_attr(src_path)
