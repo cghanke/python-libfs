@@ -283,10 +283,12 @@ class Operations(llfuse.Operations):
             try:
                 self.business_logic.metadata_plugin.write_metadata(src_path, new_metadata)
             except OSError as exc:
+                LOGGER.error("rename: Cannot write metadata to src-file %s. OSERROR=%s", src_path, exc)
                 sys.stderr.write("rename: Cannot write metadata to src-file %s. rc=%s" %
                                  (src_path, exc.errno))
                 raise FUSEError(exc.errno)
             except Exception as exc:
+                LOGGER.error("rename.write_metadata: failed for file %s. pluging threw %s", src_path, exc)
                 sys.stderr.write("rename.write_metadata: plugin returned %s" % (exc))
                 if hasattr(exc, "errno"):
                     raise FUSEError(exc.errno)
