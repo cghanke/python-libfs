@@ -35,10 +35,13 @@ class TestBase(unittest.TestCase):
         except OSError:
             pass
 
-        with subprocess.Popen([cls.LIBFS_BIN, "--logconf", cls.LIBFS_LOG_CFG, "update", "--type",
-                               cls.TYPE, cls.LIBFS_SRC_DIR, cls.LIBFS_DB],
-                              stderr=subprocess.PIPE, stdout=subprocess.PIPE) as proc:
-            output, outerr = proc.communicate()
+        cmd_list = [cls.LIBFS_BIN, "--logconf", cls.LIBFS_LOG_CFG, "update", "--type",
+                               cls.TYPE, cls.LIBFS_SRC_DIR, cls.LIBFS_DB]
+        with subprocess.Popen(cmd_list, stderr=subprocess.PIPE, stdout=subprocess.PIPE) as create_db_proc:
+            output, outerr = create_db_proc.communicate()
+            if create_db_proc.poll():
+                raise RuntimeError("Create DB command \"%s\" failed with rc=%s. output=%s, outerr=%s" %\
+                                   (" ".join(cmd_list), create_db_proc.poll(), output, outerr))
 
         # mount libfs
         cmd_list = [cls.LIBFS_BIN, "--logconf", cls.LIBFS_LOG_CFG, "mount",
