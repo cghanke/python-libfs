@@ -70,16 +70,15 @@ class BusinessLogic:
         except ImportError:
             sys.stderr.write("Sorry, database type %s not supported.\n" % db_type)
             sys.exit(2)
+
         # check if we can open the database at all.
         self.DB_BE.open(user, password, host, database)
-        
+
         # check if the db contains all required tables
         if not self.check_db(): # do the table exist?
             do_setup_db = True
             # since we are creating the db, the default view must be DEFAULT_VIEW_NAME
             assert current_view_name in [self.DEFAULT_VIEW_NAME, None]
-            # and magix may not be given 
-            assert magix is None
         else:
             do_setup_db = False
 
