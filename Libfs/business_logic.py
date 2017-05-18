@@ -70,14 +70,18 @@ class BusinessLogic:
         except ImportError:
             sys.stderr.write("Sorry, database type %s not supported.\n" % db_type)
             sys.exit(2)
+        # check if we can open the database at all.
         self.DB_BE.open(user, password, host, database)
-        try:
-            self.check_db()
-            do_setup_db = False
-        except: # setup a new db
-            assert current_view_name in [self.DEFAULT_VIEW_NAME, None]
-            assert magix != None
+        
+        # check if the db contains all required tables
+        if not self.check_db(): # do the table exist?
             do_setup_db = True
+            # since we are creating the db, the default view must be DEFAULT_VIEW_NAME
+            assert current_view_name in [self.DEFAULT_VIEW_NAME, None]
+            # and magix may not be given 
+            assert magix is None
+        else:
+            do_setup_db = False
 
         if magix is None:
             self.magix = self.get_magix_from_db()
@@ -99,7 +103,7 @@ class BusinessLogic:
 
         self.metadata_plugin = import_module("Libfs.plugins.%s" % (self.magix["plugin"]))
 
-        self.ordered_files_keys = self.DB_BE. get_columns(self.FILES_TABLE)
+        self.ordered_files_keys = self.DB_BE.get_columns(self.FILES_TABLE)
 
         self.check_tables()
         LOGGER.debug("init: self.current_view = %s", self.current_view)
@@ -205,7 +209,7 @@ class BusinessLogic:
         """
         contents = self.get_contents_by_vpath(vpath)
         if len(contents) > 2:
-             raise FUSEError(errno.ENOTEMPTY)
+            raise FUSEError(errno.ENOTEMPTY)
         return
 
     @calltrace_logger
@@ -291,18 +295,15 @@ class BusinessLogic:
     @calltrace_logger
     def check_db(self):
         """
-        checks views for consistency.
+        checks tables for exinstance.
         """
         # get tables
         res = self.DB_BE.execute_statment("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [tpl[0] for tpl in res]
         for _tab in [self.VIEWS_TABLE, self.FILES_TABLE]:
             if not _tab in tables:
-                sys.stderr.write("Internal Error: Table %s does not exist in library %s.\n" %
-                                 (self.VIEWS_TABLE, self.FILES_TABLE))
-                sys.stderr.write("Delete and recreate the library.\n")
-                sys.exit(1)
-        return
+                return False
+        return True
 
     @calltrace_logger
     def check_tables(self):
@@ -366,7 +367,12 @@ class BusinessLogic:
         metadata[self.SRC_FILENAME_KEY] = src_filename
         metadata[self.SRC_INODE_KEY] = src_statinfo.st_ino
         LOGGER.debug("metadata=%s", metadata)
-        values = ["%s" % metadata.get(k, self.UNKNOWN) for k in self.ordered_files_keys]
+        values = []
+        for k in self.ordered_files_keys:
+            try:
+                values.append("%s" % metadata.get(k, self.UNKNOWN))
+            except:
+                sys.stderr.write("Ignoring Key %s, Values %s is not a string." % (k, (metadata[k],)))
         # changing a list within a loop over itself,
         # huuu, but this should work
         for i, item  in enumerate(values):
