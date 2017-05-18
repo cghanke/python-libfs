@@ -117,8 +117,8 @@ def main():
                 full_path = os.path.abspath("%s/%s" % (root, f))
                 try:
                     metadata = plugin.read_metadata(full_path)
-                except:
-                    LOGGER.warning("cannot read metadata of file: %s", full_path)
+                except Exception as excep:
+                    LOGGER.warning("cannot read metadata of file: %s. Exception=%s", full_path, excep)
                     continue
                 bl.add_entry(full_path, metadata)
         # remove obsolete entries, if desired
