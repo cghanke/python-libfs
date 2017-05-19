@@ -92,30 +92,33 @@ class Operations(llfuse.Operations):
         """
         if inode in self.cache.inode2fd_map:
             path = None
-            fd = self.cache.get_fd_by_inode(inode)
-            LOGGER.debug("_getattr for fd %s", fd)
+            file_desc = self.cache.get_fd_by_inode(inode)
+            LOGGER.debug("_getattr for file_desc %s", file_desc)
         else:
-            fd = None
+            file_desc = None
             path = self.cache.get_path_by_inode(inode)
             LOGGER.debug("getattr for path %s", path)
             # first, check if path is a virtual directory
             if self.business_logic.is_vdir(path):
                 attr = self._get_vdir_attr(path)
                 LOGGER.debug("_getattr: returning attr from db: %s", attr)
-                return self._fill_entry(attr)
+                return self._fill_attr_entry(attr)
         # we're dealing with a file here
         try:
-            if fd is None:
+            if file_desc is None:
                 src_path = self.business_logic.get_srcfilename_by_srcinode(inode)
                 this_stat = os.lstat(src_path)
             else:
-                this_stat = os.fstat(fd)
+                this_stat = os.fstat(file_desc)
         except OSError as exc:
             raise FUSEError(exc.errno)
-        return self._fill_entry(this_stat)
+        return self._fill_attr_entry(this_stat)
 
     @calltrace_logger
     def _get_vdir_attr(self, vpath):
+        """
+        return the attributes from a virtual directory
+        """
         entry = llfuse.EntryAttributes()
         # set normal attrs of vdirs to those of mountpoint
         for attr in ('st_mode', 'st_nlink', 'st_uid', 'st_gid', 'st_rdev',
@@ -131,9 +134,13 @@ class Operations(llfuse.Operations):
         """
         assert not src_path.startswith(self.mountpoint)
         this_stat = os.lstat(src_path)
-        return self._fill_entry(this_stat)
+        return self._fill_attr_entry(this_stat)
 
-    def _fill_entry(self, stat):
+    def _fill_attr_entry(self, stat):
+        """
+        fill in a llfuseEntryAttributes- object from the stat
+        and some default attributed
+        """
         entry = llfuse.EntryAttributes()
         for attr in ('st_ino', 'st_mode', 'st_nlink', 'st_uid', 'st_gid',
                      'st_rdev', 'st_size', 'st_atime_ns', 'st_mtime_ns',
@@ -144,7 +151,7 @@ class Operations(llfuse.Operations):
         entry.attr_timeout = 5
         entry.st_blksize = 512
         entry.st_blocks = ((entry.st_size + entry.st_blksize-1) // entry.st_blksize)
-        LOGGER.debug("_fill_entry: returning inode from fs: %s", entry.st_ino)
+        LOGGER.debug("_fill_attr_entry: returning inode from fs: %s", entry.st_ino)
         return entry
 
     @calltrace_logger
@@ -283,12 +290,14 @@ class Operations(llfuse.Operations):
             try:
                 self.business_logic.metadata_plugin.write_metadata(src_path, new_metadata)
             except OSError as exc:
-                LOGGER.error("rename: Cannot write metadata to src-file %s. OSERROR=%s", src_path, exc)
+                LOGGER.error("rename: Cannot write metadata to src-file %s. OSERROR=%s",
+                             src_path, exc)
                 sys.stderr.write("rename: Cannot write metadata to src-file %s. rc=%s" %
                                  (src_path, exc.errno))
                 raise FUSEError(exc.errno)
             except Exception as exc:
-                LOGGER.error("rename.write_metadata: failed for file %s. pluging threw %s", src_path, exc)
+                LOGGER.error("rename.write_metadata: failed for file %s. pluging threw %s",
+                             src_path, exc)
                 sys.stderr.write("rename.write_metadata: plugin returned %s" % (exc))
                 if hasattr(exc, "errno"):
                     raise FUSEError(exc.errno)
@@ -325,7 +334,7 @@ class Operations(llfuse.Operations):
     @calltrace_logger
     def rmdir(self, parent_inode, name, ctx):
         """
-        remove an empty dir 
+        remove an empty dir
         """
         full_path = os.path.join(self.cache.get_path_by_inode(parent_inode), fsdecode(name))
         if not self.business_logic.is_vdir(full_path):
@@ -342,49 +351,49 @@ class Operations(llfuse.Operations):
         Increase open count
         """
         if inode in self.cache.inode2fd_map:
-            fd = self.cache.inode2fd_map[inode]
-            self.cache.fd_open_count[fd] += 1
-            return fd
+            file_desc = self.cache.inode2fd_map[inode]
+            self.cache.fd_open_count[file_desc] += 1
+            return file_desc
         if flags & os.O_CREAT:
             raise FUSEError(errno.EROFS)
         try:
-            fd = os.open(self.business_logic.get_srcfilename_by_srcinode(inode), flags)
+            file_desc = os.open(self.business_logic.get_srcfilename_by_srcinode(inode), flags)
         except OSError as exc:
             LOGGER.error("Cannot open %s with flags %s",
                          self.business_logic.get_srcfilename_by_srcinode(inode), flags)
             raise FUSEError(exc.errno)
-        self.cache.inode2fd_map[inode] = fd
-        self.cache.fd2inode_map[fd] = inode
-        self.cache.fd_open_count[fd] = 1
-        return fd
+        self.cache.inode2fd_map[inode] = file_desc
+        self.cache.fd2inode_map[file_desc] = inode
+        self.cache.fd_open_count[file_desc] = 1
+        return file_desc
 
     @calltrace_logger
-    def read(self, fd, offset, length):
+    def read(self, file_desc, offset, length):
         """
         read from a file descriptor
         """
-        os.lseek(fd, offset, os.SEEK_SET)
-        return os.read(fd, length)
+        os.lseek(file_desc, offset, os.SEEK_SET)
+        return os.read(file_desc, length)
 
     @calltrace_logger
-    def release(self, fd):
+    def release(self, file_desc):
         """
         Release open file.
         This method will be called when the last file descriptor of fh has been closed.
         """
 
         # XXX This should be removed.
-        # XXX fd should be globally renamed to file_handle
-        if self.cache.fd_open_count[fd] > 1:
-            self.cache.fd_open_count[fd] -= 1
+        # Why ??
+        if self.cache.fd_open_count[file_desc] > 1:
+            self.cache.fd_open_count[file_desc] -= 1
             return
 
-        del self.cache.fd_open_count[fd]
-        inode = self.cache.fd2inode_map[fd]
+        del self.cache.fd_open_count[file_desc]
+        inode = self.cache.fd2inode_map[file_desc]
         del self.cache.inode2fd_map[inode]
-        del self.cache.fd2inode_map[fd]
+        del self.cache.fd2inode_map[file_desc]
         try:
-            os.close(fd)
+            os.close(file_desc)
         except OSError as exc:
             raise FUSEError(exc.errno)
 
@@ -394,6 +403,7 @@ class Operations(llfuse.Operations):
         used number of indes should represent number of files etc
         """
         # XXX should be fed from the DB.
+        # on mount scan the DB and put in into a global
         stat_ = llfuse.StatvfsData()
         stat_.f_bsize = 666
         stat_.f_frsize = 666

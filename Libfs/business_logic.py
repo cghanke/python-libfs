@@ -214,7 +214,7 @@ class BusinessLogic:
     @calltrace_logger
     def get_vdir_inode(self, canon_path):
         """
-        put vpath in a cache
+        put vpath in a module-local cache
         """
         if not canon_path in self.vdirs:
             self.vdirs.append(canon_path)
@@ -371,7 +371,8 @@ class BusinessLogic:
             try:
                 values.append("%s" % metadata.get(k, self.UNKNOWN))
             except:
-                sys.stderr.write("Ignoring Key %s, Values %s is not a string." % (k, (metadata[k],)))
+                sys.stderr.write("Ignoring Key %s, Values %s is not a string."\
+                                 % (k, (metadata[k],)))
         # changing a list within a loop over itself,
         # huuu, but this should work
         for i, item  in enumerate(values):

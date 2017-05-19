@@ -13,7 +13,7 @@ import re
 import sys
 
 # regex to see if a file has been marked as a duplicate
-DUPLICATE_COUNTER_RX = re.compile(".* \(libfs:\d+\)$")
+DUPLICATE_COUNTER_RX = re.compile(r".* \(libfs:\d+\)$")
 
 # dict to store the actual calltrace
 # by thread-identifier
@@ -88,6 +88,9 @@ def get_vpath_list(vpath):
 
 @calltrace_logger
 def filename_has_duplicate_counter(filename):
+    """
+    check if a given filename ends in a virtual duplicate-counter
+    """
     if DUPLICATE_COUNTER_RX.match(filename):
         return True
     return False
