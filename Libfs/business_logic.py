@@ -522,7 +522,7 @@ class BusinessLogic:
 
     def setup_filename_parsing(self):
         """
-        return a metadata-dict from a virtual filename
+        compile the regular expression for the filename parsing
         """
         i = 0
         inside_key = False
@@ -581,6 +581,7 @@ class BusinessLogic:
         """
         returns contents of virtual directory
         files are only returned and the very leaf of the current_view
+        duplicate files have a (libfs:%d) counter appended on the spot.
         """
         LOGGER.debug("get_contents_by_vpath got vpath: %s", vpath)
         vpath_list = get_vpath_list(vpath)
@@ -611,7 +612,7 @@ class BusinessLogic:
                 file_vname = self.get_gen_filename(src_filename)
                 if file_vname in file_name_occurrences:
                     file_name_occurrences[file_vname] += 1
-                    file_vname = "%s (%d)" % (file_vname, file_name_occurrences[file_vname])
+                    file_vname = "%s (libfs:%d)" % (file_vname, file_name_occurrences[file_vname])
                 else:
                     file_name_occurrences[file_vname] = 0
                 contents.append((src_inode, file_vname, src_filename))

@@ -9,14 +9,17 @@ import logging.config
 import threading
 from traceback import format_tb
 import os
+import re
 import sys
+
+# regex to see if a file has been marked as a duplicate
+DUPLICATE_COUNTER_RX = re.compile(".* \(libfs:\d+\)$")
 
 # dict to store the actual calltrace
 # by thread-identifier
 # calltrace[thread.ident] = indentation-level
 CALLTRACE_STATE = defaultdict(lambda: 0)
 LOGGER = logging.getLogger(__name__)
-
 def calltrace_logger(func):
     """
     decorator to log from where a function or method is called
@@ -83,7 +86,11 @@ def get_vpath_list(vpath):
     vpath_list = [v for v in vpath.split("/") if len(v) > 0]
     return vpath_list
 
-
+@calltrace_logger
+def filename_has_duplicate_counter(filename):
+    if DUPLICATE_COUNTER_RX.match(filename):
+        return True
+    return False
 
 def get_available_plugins():
     """
