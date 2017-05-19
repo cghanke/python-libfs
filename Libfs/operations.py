@@ -313,6 +313,9 @@ class Operations(llfuse.Operations):
             self._pinode_fn2srcpath_map[old_parent_inode][new_name] = src_path
             del self._pinode_fn2srcpath_map[old_parent_inode][old_name]
             self.cache.lookup_lock.release()
+
+            # tell kernel to forget about this file, we changed its metadata
+            llfuse.invalidate_inode(inode)
         return
 
     @calltrace_logger
